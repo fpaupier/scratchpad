@@ -58,36 +58,32 @@ Go to https://hub.jetbrains.com and sign up (or sign in with your JetBrains acco
 
 1. Go to https://plugins.jetbrains.com/author/me/tokens
 2. Click **Generate Token**
-3. Copy the token — you'll need it to publish
+3. Copy the token
 
 ### 3. Configure the token
 
-Add the token to `~/.gradle/gradle.properties` (create the file if it doesn't exist):
-
-```properties
-intellijPublishToken=<your-token-here>
-```
-
-Or pass it as an environment variable:
+Copy the example env file and paste your token:
 
 ```bash
-export INTELLIJ_PUBLISH_TOKEN=<your-token-here>
+cp .env.example .env
 ```
 
-### 4. Add publishing config to `build.gradle.kts`
+Then edit `.env`:
 
-Add this block:
-
-```kotlin
-tasks {
-    publishPlugin {
-        token.set(
-            providers.gradleProperty("intellijPublishToken")
-                .orElse(providers.environmentVariable("INTELLIJ_PUBLISH_TOKEN"))
-        )
-    }
-}
 ```
+INTELLIJ_PUBLISH_TOKEN=your-token-here
+```
+
+The `.env` file is gitignored. The build reads the token from `.env` automatically, or from the `INTELLIJ_PUBLISH_TOKEN` environment variable if set.
+
+### 4. Update metadata before publishing
+
+Edit `src/main/resources/META-INF/plugin.xml` to fill in:
+- `<description>` — shown on the marketplace listing
+- `<vendor>` — your name or organization, optionally with `email` and `url` attributes
+- `<change-notes>` — changelog for each version
+
+Bump the version in `build.gradle.kts` before each release.
 
 ### 5. Publish
 
@@ -96,12 +92,3 @@ tasks {
 ```
 
 The plugin will be uploaded and go through JetBrains review (typically 1-2 business days). Once approved, it appears on the [JetBrains Marketplace](https://plugins.jetbrains.com/).
-
-### 6. Update metadata before publishing
-
-Edit `src/main/resources/META-INF/plugin.xml` to fill in:
-- `<description>` — shown on the marketplace listing
-- `<vendor>` — your name or organization, optionally with `email` and `url` attributes
-- `<change-notes>` — changelog for each version
-
-Bump the version in `build.gradle.kts` before each release.
