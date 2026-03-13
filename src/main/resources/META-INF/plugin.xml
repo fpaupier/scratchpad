@@ -1,12 +1,12 @@
 <idea-plugin url="https://tryalexandria.fr">
     <id>com.alexandria.scratchpad-plugin</id>
-    <name>Scratchpad</name>
+    <name>@FileRef</name>
     <version>1.0.0</version>
     <vendor url="https://tryalexandria.fr" email="contact@tryalexandria.fr">TryAlexandrIA.fr</vendor>
 
     <description><![CDATA[
     <p>
-        <b>Scratchpad</b> brings fast, fuzzy file-reference autocomplete to your scratch files,
+        <b>@FileRef</b> brings fast, fuzzy file-reference autocomplete to your scratch files,
         plain-text notes, and Markdown documents. Type <code>@</code> and start typing a filename
         to instantly search your entire project and insert a relative path — no copy-pasting required.
     </p>
