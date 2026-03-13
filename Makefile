@@ -2,7 +2,7 @@
 
 ## Build the plugin
 build:
-	./gradlew build -x buildSearchableOptions
+	./gradlew build -x buildSearchableOptions -x prepareJarSearchableOptions
 
 ## Launch a sandbox IDE with the plugin pre-loaded
 run:
@@ -14,11 +14,11 @@ test:
 
 ## Package for distribution (zip)
 package:
-	./gradlew buildPlugin -x buildSearchableOptions
+	./gradlew buildPlugin -x buildSearchableOptions -x prepareJarSearchableOptions
 
 ## Publish to JetBrains Marketplace
 publish: build package
-	./gradlew buildPlugin publishPlugin -x buildSearchableOptions
+	./gradlew buildPlugin publishPlugin -x buildSearchableOptions -x prepareJarSearchableOptions
 
 ## Remove build artifacts
 clean:
