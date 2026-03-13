@@ -14,7 +14,7 @@ test:
 
 ## Package for distribution (zip)
 package:
-	./gradlew buildPlugin
+	./gradlew buildPlugin -x buildSearchableOptions
 
 ## Publish to JetBrains Marketplace
 publish:
