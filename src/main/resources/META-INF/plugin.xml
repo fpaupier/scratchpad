@@ -1,14 +1,42 @@
-<idea-plugin>
+<idea-plugin url="https://tryalexandria.fr">
     <id>com.alexandria.scratchpad-plugin</id>
-    <name>Scratchpad Plugin</name>
+    <name>Scratchpad</name>
     <version>1.0.0</version>
-    <vendor>TryAlexandrIA.fr</vendor>
+    <vendor url="https://tryalexandria.fr" email="contact@tryalexandria.fr">TryAlexandrIA.fr</vendor>
 
     <description><![CDATA[
-    Autocomplete file references with <code>@</code> in scratch files, <code>.txt</code>, and <code>.md</code> files.
-    Type <code>@</code> followed by a filename query to fuzzy-search project files
-    and insert a relative path reference.
+    <p>
+        <b>Scratchpad</b> brings fast, fuzzy file-reference autocomplete to your scratch files,
+        plain-text notes, and Markdown documents. Type <code>@</code> and start typing a filename
+        to instantly search your entire project and insert a relative path — no copy-pasting required.
+    </p>
+
+    <h3>Features</h3>
+    <ul>
+        <li><b>Fuzzy file search</b> — find any project file by typing a few characters after <code>@</code></li>
+        <li><b>Instant trigger</b> — autocomplete pops up the moment you type <code>@</code>, no shortcut needed</li>
+        <li><b>Scratch files, .txt &amp; .md</b> — works in the file types where you take notes and jot down references</li>
+        <li><b>All JetBrains IDEs</b> — IntelliJ IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, and more</li>
+        <li><b>Open files first</b> — currently open files are prioritized at the top of results</li>
+    </ul>
+
+    <h3>How to use</h3>
+    <ol>
+        <li>Open a scratch file (<em>Ctrl+Shift+N / Cmd+Shift+N</em>), <code>.txt</code>, or <code>.md</code> file</li>
+        <li>Type <code>@</code> followed by part of a filename</li>
+        <li>Select a match from the completion popup to insert the relative path</li>
+    </ol>
     ]]></description>
+
+    <change-notes><![CDATA[
+    <h3>1.0.0</h3>
+    <ul>
+        <li>Initial release</li>
+        <li>Fuzzy file-reference autocomplete triggered by <code>@</code></li>
+        <li>Support for scratch files, <code>.txt</code>, and <code>.md</code> files</li>
+        <li>Open-file prioritization in completion results</li>
+    </ul>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
 
