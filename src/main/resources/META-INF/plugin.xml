@@ -2,7 +2,7 @@
     <id>com.alexandria.scratchpad-plugin</id>
     <name>Scratchpad Plugin</name>
     <version>1.0.0</version>
-    <vendor>Alexandria</vendor>
+    <vendor>TryAlexandrIA.fr</vendor>
 
     <description><![CDATA[
     Autocomplete file references with <code>@</code> in scratch files, <code>.txt</code>, and <code>.md</code> files.
