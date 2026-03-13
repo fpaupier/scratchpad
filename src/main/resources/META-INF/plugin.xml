@@ -1,6 +1,6 @@
 <idea-plugin url="https://tryalexandria.fr">
     <id>com.alexandria.scratchpad-plugin</id>
-    <name>@FileRef</name>
+    <name>FileRef</name>
     <version>1.0.0</version>
     <vendor url="https://tryalexandria.fr" email="contact@tryalexandria.fr">TryAlexandrIA.fr</vendor>
 
