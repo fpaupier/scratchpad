@@ -8,6 +8,8 @@ import com.intellij.codeInsight.completion.PrefixMatcher
 import com.intellij.codeInsight.completion.PrioritizedLookupElement
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
@@ -16,6 +18,7 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.codeStyle.NameUtil
 
 private const val MAX_RESULTS = 50
+private const val OPEN_FILE_BONUS = 15.0
 
 class AtFileCompletionContributor : CompletionContributor() {
 
@@ -33,27 +36,31 @@ class AtFileCompletionContributor : CompletionContributor() {
         val basePath = project.basePath ?: return
         val fileIndex = ProjectFileIndex.getInstance(project)
 
-        // Use ALWAYS_TRUE so IntelliJ doesn't filter our results — we handle matching ourselves
-        val openResult = result.withPrefixMatcher(PrefixMatcher.ALWAYS_TRUE)
+        val prefixMatcher = if (query.isNotEmpty()) AtFilePrefixMatcher(query) else PrefixMatcher.ALWAYS_TRUE
+        val openResult = result.withPrefixMatcher(prefixMatcher)
 
         if (query.isEmpty()) {
-            fillEmptyQueryResults(openResult, fileIndex, basePath)
+            fillEmptyQueryResults(openResult, fileIndex, basePath, project)
+        } else if (query.contains('/')) {
+            fillPathQueryResults(query, openResult, fileIndex, basePath, project)
         } else {
-            fillQueryResults(query, openResult, fileIndex, basePath, project)
+            fillFilenameQueryResults(query, openResult, fileIndex, basePath, project)
         }
     }
 
     /**
-     * Empty query: show all non-excluded, non-directory files sorted by depth (shallow first)
-     * then alphabetically, capped at MAX_RESULTS.
+     * Empty query: show all non-excluded, non-directory files sorted by:
+     * open files first, then by depth (shallow first), then alphabetically.
      */
     private fun fillEmptyQueryResults(
         result: CompletionResultSet,
         fileIndex: ProjectFileIndex,
-        basePath: String
+        basePath: String,
+        project: Project
     ) {
-        data class FileEntry(val vf: VirtualFile, val relativePath: String, val depth: Int)
+        data class FileEntry(val vf: VirtualFile, val relativePath: String, val depth: Int, val isOpen: Boolean)
 
+        val openPaths = getOpenFilePaths(project, basePath)
         val entries = mutableListOf<FileEntry>()
 
         fileIndex.iterateContent { vf ->
@@ -61,16 +68,19 @@ class AtFileCompletionContributor : CompletionContributor() {
                 val relativePath = computeRelativePath(vf, basePath)
                 if (relativePath != null) {
                     val depth = relativePath.count { it == '/' }
-                    entries.add(FileEntry(vf, relativePath, depth))
+                    entries.add(FileEntry(vf, relativePath, depth, relativePath in openPaths))
                 }
             }
-            true // continue iterating
+            true
         }
 
-        // Sort by depth (shallow first), then alphabetically
-        entries.sortWith(compareBy<FileEntry> { it.depth }.thenBy { it.relativePath.lowercase() })
+        entries.sortWith(
+            compareByDescending<FileEntry> { it.isOpen }
+                .thenBy { it.depth }
+                .thenBy { it.relativePath.lowercase() }
+        )
 
-        for (entry in entries.take(MAX_RESULTS)) {
+        for ((index, entry) in entries.take(MAX_RESULTS).withIndex()) {
             val parentDir = entry.vf.parent?.let { computeRelativePath(it, basePath) } ?: ""
             val element = LookupElementBuilder.create(entry.relativePath)
                 .withPresentableText(entry.vf.name)
@@ -78,25 +88,25 @@ class AtFileCompletionContributor : CompletionContributor() {
                 .withIcon(entry.vf.fileType.icon)
                 .withInsertHandler(atInsertHandler(entry.relativePath))
 
-            // Use index-based priority to preserve sort order (higher = shown first)
-            val priority = (MAX_RESULTS - entries.indexOf(entry)).toDouble()
+            val priority = (MAX_RESULTS - index).toDouble()
             result.addElement(PrioritizedLookupElement.withPriority(element, priority))
         }
     }
 
     /**
-     * Query present: fuzzy-search project files using MinusculeMatcher.
+     * Filename-based fuzzy search (query without `/`).
      */
-    private fun fillQueryResults(
+    private fun fillFilenameQueryResults(
         query: String,
         result: CompletionResultSet,
         fileIndex: ProjectFileIndex,
         basePath: String,
-        project: com.intellij.openapi.project.Project
+        project: Project
     ) {
         val queryLower = query.lowercase()
         val fuzzyMatcher = NameUtil.buildMatcher("*$query").build()
         val projectScope = GlobalSearchScope.projectScope(project)
+        val openPaths = getOpenFilePaths(project, basePath)
 
         data class ScoredFile(val vf: VirtualFile, val filename: String, val relativePath: String, val priority: Double)
 
@@ -124,8 +134,9 @@ class AtFileCompletionContributor : CompletionContributor() {
 
                 val pathBonus = if (relativePath.lowercase().contains(queryLower) &&
                     !filenameLower.contains(queryLower)) 10.0 else 0.0
+                val openBonus = if (relativePath in openPaths) OPEN_FILE_BONUS else 0.0
 
-                scored.add(ScoredFile(vf, filename, relativePath, priority + pathBonus))
+                scored.add(ScoredFile(vf, filename, relativePath, priority + pathBonus + openBonus))
             }
         }
 
@@ -142,6 +153,53 @@ class AtFileCompletionContributor : CompletionContributor() {
 
             result.addElement(PrioritizedLookupElement.withPriority(element, sf.priority))
         }
+    }
+
+    /**
+     * Path-based search (query contains `/`). Matches against full relative paths.
+     */
+    private fun fillPathQueryResults(
+        query: String,
+        result: CompletionResultSet,
+        fileIndex: ProjectFileIndex,
+        basePath: String,
+        project: Project
+    ) {
+        val fuzzyMatcher = NameUtil.buildMatcher("*$query").build()
+        val openPaths = getOpenFilePaths(project, basePath)
+
+        data class ScoredFile(val vf: VirtualFile, val relativePath: String, val priority: Double)
+
+        val scored = mutableListOf<ScoredFile>()
+
+        fileIndex.iterateContent { vf ->
+            if (!vf.isDirectory && !fileIndex.isExcluded(vf)) {
+                val relativePath = computeRelativePath(vf, basePath)
+                if (relativePath != null && fuzzyMatcher.matches(relativePath)) {
+                    val degree = fuzzyMatcher.matchingDegree(relativePath)
+                    val openBonus = if (relativePath in openPaths) OPEN_FILE_BONUS else 0.0
+                    scored.add(ScoredFile(vf, relativePath, 40.0 + degree.coerceIn(-20, 20) + openBonus))
+                }
+            }
+            true
+        }
+
+        scored.sortByDescending { it.priority }
+
+        for (sf in scored.take(MAX_RESULTS)) {
+            val element = LookupElementBuilder.create(sf.relativePath)
+                .withPresentableText(sf.relativePath)
+                .withIcon(sf.vf.fileType.icon)
+                .withInsertHandler(atInsertHandler(sf.relativePath))
+
+            result.addElement(PrioritizedLookupElement.withPriority(element, sf.priority))
+        }
+    }
+
+    private fun getOpenFilePaths(project: Project, basePath: String): Set<String> {
+        return FileEditorManager.getInstance(project).openFiles
+            .mapNotNull { computeRelativePath(it, basePath) }
+            .toSet()
     }
 
     private fun atInsertHandler(relativePath: String): InsertHandler<LookupElement> {
@@ -164,5 +222,10 @@ class AtFileCompletionContributor : CompletionContributor() {
         if (!path.startsWith(basePath)) return null
         val relative = path.removePrefix(basePath).removePrefix("/")
         return relative.ifEmpty { null }
+    }
+
+    private class AtFilePrefixMatcher(prefix: String) : PrefixMatcher(prefix) {
+        override fun prefixMatches(name: String) = true
+        override fun cloneWithPrefix(prefix: String) = AtFilePrefixMatcher(prefix)
     }
 }
