@@ -5,7 +5,7 @@
     <vendor>Alexandria</vendor>
 
     <description><![CDATA[
-    Autocomplete file references with <code>@</code> in scratch files.
+    Autocomplete file references with <code>@</code> in scratch files, <code>.txt</code>, and <code>.md</code> files.
     Type <code>@</code> followed by a filename query to fuzzy-search project files
     and insert a relative path reference.
     ]]></description>

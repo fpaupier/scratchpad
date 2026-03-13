@@ -3,10 +3,11 @@ package com.alexandria.atfileref
 import com.intellij.codeInsight.completion.CompletionContributor
 import com.intellij.codeInsight.completion.CompletionParameters
 import com.intellij.codeInsight.completion.CompletionResultSet
+import com.intellij.codeInsight.completion.InsertHandler
 import com.intellij.codeInsight.completion.PrefixMatcher
 import com.intellij.codeInsight.completion.PrioritizedLookupElement
+import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
-import com.intellij.ide.scratch.ScratchUtil
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VirtualFile
@@ -21,32 +22,81 @@ class AtFileCompletionContributor : CompletionContributor() {
     override fun fillCompletionVariants(parameters: CompletionParameters, result: CompletionResultSet) {
         val file = parameters.originalFile
         val virtualFile = file.virtualFile ?: return
-        if (!ScratchUtil.isScratch(virtualFile)) return
+        if (!isSupportedFile(virtualFile)) return
 
         val project = parameters.editor.project ?: return
         val document = parameters.editor.document
         val caretOffset = parameters.offset
-        val lineNumber = document.getLineNumber(caretOffset)
-        val lineStart = document.getLineStartOffset(lineNumber)
-        val lineTextBeforeCaret = document.getText(TextRange(lineStart, caretOffset))
 
-        val atIndex = lineTextBeforeCaret.lastIndexOf('@')
-        if (atIndex < 0) return
+        val query = findAtQuery(document, caretOffset) ?: return
 
-        val query = lineTextBeforeCaret.substring(atIndex + 1)
-        if (query.isEmpty()) return
-
-        val queryLower = query.lowercase()
+        val basePath = project.basePath ?: return
+        val fileIndex = ProjectFileIndex.getInstance(project)
 
         // Use ALWAYS_TRUE so IntelliJ doesn't filter our results — we handle matching ourselves
         val openResult = result.withPrefixMatcher(PrefixMatcher.ALWAYS_TRUE)
 
-        // MinusculeMatcher for fuzzy/camel-hump matching (same engine as Search Everywhere)
-        val fuzzyMatcher = NameUtil.buildMatcher("*$query").build()
+        if (query.isEmpty()) {
+            fillEmptyQueryResults(openResult, fileIndex, basePath)
+        } else {
+            fillQueryResults(query, openResult, fileIndex, basePath, project)
+        }
+    }
 
-        val basePath = project.basePath ?: return
+    /**
+     * Empty query: show all non-excluded, non-directory files sorted by depth (shallow first)
+     * then alphabetically, capped at MAX_RESULTS.
+     */
+    private fun fillEmptyQueryResults(
+        result: CompletionResultSet,
+        fileIndex: ProjectFileIndex,
+        basePath: String
+    ) {
+        data class FileEntry(val vf: VirtualFile, val relativePath: String, val depth: Int)
+
+        val entries = mutableListOf<FileEntry>()
+
+        fileIndex.iterateContent { vf ->
+            if (!vf.isDirectory && !fileIndex.isExcluded(vf)) {
+                val relativePath = computeRelativePath(vf, basePath)
+                if (relativePath != null) {
+                    val depth = relativePath.count { it == '/' }
+                    entries.add(FileEntry(vf, relativePath, depth))
+                }
+            }
+            true // continue iterating
+        }
+
+        // Sort by depth (shallow first), then alphabetically
+        entries.sortWith(compareBy<FileEntry> { it.depth }.thenBy { it.relativePath.lowercase() })
+
+        for (entry in entries.take(MAX_RESULTS)) {
+            val parentDir = entry.vf.parent?.let { computeRelativePath(it, basePath) } ?: ""
+            val element = LookupElementBuilder.create(entry.relativePath)
+                .withPresentableText(entry.vf.name)
+                .withTypeText(parentDir, true)
+                .withIcon(entry.vf.fileType.icon)
+                .withInsertHandler(atInsertHandler(entry.relativePath))
+
+            // Use index-based priority to preserve sort order (higher = shown first)
+            val priority = (MAX_RESULTS - entries.indexOf(entry)).toDouble()
+            result.addElement(PrioritizedLookupElement.withPriority(element, priority))
+        }
+    }
+
+    /**
+     * Query present: fuzzy-search project files using MinusculeMatcher.
+     */
+    private fun fillQueryResults(
+        query: String,
+        result: CompletionResultSet,
+        fileIndex: ProjectFileIndex,
+        basePath: String,
+        project: com.intellij.openapi.project.Project
+    ) {
+        val queryLower = query.lowercase()
+        val fuzzyMatcher = NameUtil.buildMatcher("*$query").build()
         val projectScope = GlobalSearchScope.projectScope(project)
-        val fileIndex = ProjectFileIndex.getInstance(project)
 
         data class ScoredFile(val vf: VirtualFile, val filename: String, val relativePath: String, val priority: Double)
 
@@ -55,13 +105,11 @@ class AtFileCompletionContributor : CompletionContributor() {
         for (filename in FilenameIndex.getAllFilenames(project)) {
             val filenameLower = filename.lowercase()
 
-            // Match by: exact, prefix, substring (case-insensitive), or fuzzy camel-hump
             val priority: Double = when {
                 filenameLower == queryLower -> 100.0
                 filenameLower.startsWith(queryLower) -> 80.0
                 filenameLower.contains(queryLower) -> 60.0
                 fuzzyMatcher.matches(filename) -> {
-                    // Use the matcher's degree as a sub-score for fuzzy matches
                     val degree = fuzzyMatcher.matchingDegree(filename)
                     40.0 + degree.coerceIn(-20, 20)
                 }
@@ -71,9 +119,9 @@ class AtFileCompletionContributor : CompletionContributor() {
             val files = FilenameIndex.getVirtualFilesByName(filename, projectScope)
             for (vf in files) {
                 if (!fileIndex.isInContent(vf)) continue
+                if (fileIndex.isExcluded(vf)) continue
                 val relativePath = computeRelativePath(vf, basePath) ?: continue
 
-                // Boost files whose path also contains the query
                 val pathBonus = if (relativePath.lowercase().contains(queryLower) &&
                     !filenameLower.contains(queryLower)) 10.0 else 0.0
 
@@ -81,34 +129,33 @@ class AtFileCompletionContributor : CompletionContributor() {
             }
         }
 
-        // Sort by priority descending, take top N
         scored.sortByDescending { it.priority }
 
-        for ((i, sf) in scored.take(MAX_RESULTS).withIndex()) {
+        for (sf in scored.take(MAX_RESULTS)) {
             val parentDir = sf.vf.parent?.let { computeRelativePath(it, basePath) } ?: ""
 
             val element = LookupElementBuilder.create(sf.relativePath)
                 .withPresentableText(sf.filename)
                 .withTypeText(parentDir, true)
                 .withIcon(sf.vf.fileType.icon)
-                .withInsertHandler { context, _ ->
-                    val startOffset = context.startOffset
-                    val doc = context.document
-                    val lineNum = doc.getLineNumber(startOffset)
-                    val lineStartOff = doc.getLineStartOffset(lineNum)
-                    val textBeforeInsert = doc.getText(
-                        TextRange(lineStartOff, startOffset)
-                    )
-                    val atPos = textBeforeInsert.lastIndexOf('@')
-                    if (atPos >= 0) {
-                        val atOffset = lineStartOff + atPos
-                        doc.replaceString(atOffset + 1, context.tailOffset, sf.relativePath)
-                    }
-                }
+                .withInsertHandler(atInsertHandler(sf.relativePath))
 
-            // Use priority so IntelliJ preserves our sort order
-            val prioritized = PrioritizedLookupElement.withPriority(element, sf.priority)
-            openResult.addElement(prioritized)
+            result.addElement(PrioritizedLookupElement.withPriority(element, sf.priority))
+        }
+    }
+
+    private fun atInsertHandler(relativePath: String): InsertHandler<LookupElement> {
+        return InsertHandler { context, _ ->
+            val startOffset = context.startOffset
+            val doc = context.document
+            val lineNum = doc.getLineNumber(startOffset)
+            val lineStartOff = doc.getLineStartOffset(lineNum)
+            val textBeforeInsert = doc.getText(TextRange(lineStartOff, startOffset))
+            val atPos = textBeforeInsert.lastIndexOf('@')
+            if (atPos >= 0) {
+                val atOffset = lineStartOff + atPos
+                doc.replaceString(atOffset + 1, context.tailOffset, relativePath)
+            }
         }
     }
 
