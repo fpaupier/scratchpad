@@ -11,35 +11,27 @@ Works on all JetBrains IDEs (PyCharm, WebStorm, IntelliJ IDEA, etc.).
 
 ## Development
 
-### Run in a sandbox IDE
+| Command        | Description                                        |
+|----------------|----------------------------------------------------|
+| `make build`   | Build the plugin                                   |
+| `make run`     | Launch a sandbox IDE with the plugin pre-loaded     |
+| `make test`    | Run tests                                          |
+| `make package` | Package for distribution (zip)                     |
+| `make publish` | Publish to JetBrains Marketplace                   |
+| `make clean`   | Remove build artifacts                             |
 
-Launches a disposable IDE instance with the plugin pre-loaded:
+### Manual testing
 
-```bash
-./gradlew runIde
-```
+1. Run `make run` to launch the sandbox IDE
+2. Open or create any project
+3. Open a scratch file: **Cmd+Shift+N** (macOS) / **Ctrl+Shift+Alt+Insert** (Linux/Windows), choose Text or Markdown
+4. Type `@` — the popup should show top-level project files immediately
+5. Type `@docker` — narrows to `Dockerfile`, `docker-compose.yml`, etc.
+6. Select a result — it inserts `@relative/path/to/file`
+7. Also works in `.txt` and `.md` files
+8. Type `@` in a regular project file (e.g. `.kt`) — nothing should happen
 
-### Test manually
-
-1. In the sandbox IDE, open or create any project
-2. Open a scratch file: **Cmd+Shift+N** (macOS) / **Ctrl+Shift+Alt+Insert** (Linux/Windows), choose Text or Markdown
-3. Type `@docker` — the popup should show `Dockerfile`, `docker-compose.yml`, etc.
-4. Select a result — it inserts `@relative/path/to/file`
-5. Type `@` in a regular project file — nothing should happen (scratch-only guard)
-
-### Build
-
-```bash
-./gradlew build
-```
-
-### Package for distribution
-
-```bash
-./gradlew buildPlugin
-```
-
-Produces `build/distributions/scratchpad-plugin-<version>.zip`.
+`make package` produces `build/distributions/scratchpad-plugin-<version>.zip`.
 
 ### Install from disk
 
@@ -88,7 +80,7 @@ Bump the version in `build.gradle.kts` before each release.
 ### 5. Publish
 
 ```bash
-./gradlew publishPlugin
+make publish
 ```
 
 The plugin will be uploaded and go through JetBrains review (typically 1-2 business days). Once approved, it appears on the [JetBrains Marketplace](https://plugins.jetbrains.com/).
