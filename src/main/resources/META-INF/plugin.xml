@@ -1,0 +1,20 @@
+<idea-plugin>
+    <id>com.alexandria.scratchpad-plugin</id>
+    <name>Scratchpad Plugin</name>
+    <version>1.0.0</version>
+    <vendor>Alexandria</vendor>
+
+    <description><![CDATA[
+    Autocomplete file references with <code>@</code> in scratch files.
+    Type <code>@</code> followed by a filename query to fuzzy-search project files
+    and insert a relative path reference.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <typedHandler implementation="com.alexandria.atfileref.AtTypedHandler"/>
+        <completion.contributor language="any"
+            implementationClass="com.alexandria.atfileref.AtFileCompletionContributor"/>
+    </extensions>
+</idea-plugin>
