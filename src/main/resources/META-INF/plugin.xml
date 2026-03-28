@@ -1,7 +1,7 @@
 <idea-plugin url="https://tryalexandria.fr">
     <id>com.alexandria.scratchpad-plugin</id>
     <name>FileRef</name>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <vendor url="https://tryalexandria.fr" email="contact@tryalexandria.fr">TryAlexandrIA.fr</vendor>
 
     <description><![CDATA[
@@ -29,6 +29,11 @@
     ]]></description>
 
     <change-notes><![CDATA[
+    <h3>1.1.0</h3>
+    <ul>
+        <li>Extended compatibility to JetBrains 2026.x IDEs (IntelliJ IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, etc.)</li>
+        <li>Updated IntelliJ Platform Gradle Plugin to 2.13.1</li>
+    </ul>
     <h3>1.0.0</h3>
     <ul>
         <li>Initial release</li>

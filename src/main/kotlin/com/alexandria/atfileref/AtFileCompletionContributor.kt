@@ -36,7 +36,7 @@ class AtFileCompletionContributor : CompletionContributor() {
         val basePath = project.basePath ?: return
         val fileIndex = ProjectFileIndex.getInstance(project)
 
-        val prefixMatcher = if (query.isNotEmpty()) AtFilePrefixMatcher(query) else PrefixMatcher.ALWAYS_TRUE
+        val prefixMatcher = AtFilePrefixMatcher(query)
         val openResult = result.withPrefixMatcher(prefixMatcher)
 
         if (query.isEmpty()) {

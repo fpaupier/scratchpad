@@ -1,11 +1,11 @@
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "2.3.10"
-    id("org.jetbrains.intellij.platform") version "2.13.0"
+    id("org.jetbrains.intellij.platform") version "2.13.1"
 }
 
 group = "com.alexandria"
-version = "1.0.1"
+version = "1.1.0"
 
 repositories {
     mavenCentral()
@@ -16,7 +16,7 @@ repositories {
 
 dependencies {
     intellijPlatform {
-        intellijIdeaCommunity("2024.3")
+        intellijIdea("2026.1")
     }
 }
 
@@ -35,7 +35,7 @@ val dotenv = file(".env").takeIf { it.exists() }?.readLines()
 tasks {
     patchPluginXml {
         sinceBuild.set("243")
-        untilBuild.set("253.*")
+        untilBuild.set("263.*")
     }
 
     publishPlugin {
