@@ -6,6 +6,7 @@ import com.intellij.codeInsight.completion.CompletionResultSet
 import com.intellij.codeInsight.completion.InsertHandler
 import com.intellij.codeInsight.completion.PrefixMatcher
 import com.intellij.codeInsight.completion.PrioritizedLookupElement
+import com.intellij.patterns.StandardPatterns
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementBuilder
 import com.intellij.openapi.fileEditor.FileEditorManager
@@ -36,8 +37,10 @@ class AtFileCompletionContributor : CompletionContributor() {
         val basePath = project.basePath ?: return
         val fileIndex = ProjectFileIndex.getInstance(project)
 
-        val prefixMatcher = AtFilePrefixMatcher(query)
-        val openResult = result.withPrefixMatcher(prefixMatcher)
+        // Restart completion whenever the typed prefix changes so results are re-computed
+        result.restartCompletionOnPrefixChange(StandardPatterns.string())
+
+        val openResult = result.withPrefixMatcher(AtFilePrefixMatcher(query))
 
         if (query.isEmpty()) {
             fillEmptyQueryResults(openResult, fileIndex, basePath, project)
@@ -225,7 +228,19 @@ class AtFileCompletionContributor : CompletionContributor() {
     }
 
     private class AtFilePrefixMatcher(prefix: String) : PrefixMatcher(prefix) {
-        override fun prefixMatches(name: String) = true
+        private val fuzzyMatcher by lazy {
+            if (prefix.isNotEmpty()) NameUtil.buildMatcher("*$prefix").build() else null
+        }
+
+        override fun prefixMatches(name: String): Boolean {
+            if (prefix.isEmpty()) return true
+            val queryLower = prefix.lowercase()
+            val filename = name.substringAfterLast('/').lowercase()
+            if (filename.contains(queryLower)) return true
+            if (name.lowercase().contains(queryLower)) return true
+            return fuzzyMatcher?.let { it.matches(filename) || it.matches(name) } ?: false
+        }
+
         override fun cloneWithPrefix(prefix: String) = AtFilePrefixMatcher(prefix)
     }
 }
